@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<!-- saved from url=(0105)https://kun-liu.com/blog/numerical%20computing/2017/12/21/use-native-blas-and-lapack-in-apache-spark.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+    
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="author" content="Kun Liu">    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Kun Liu&#39;s personal website">
+    <meta name="robots" content="index,follow">
+    <meta name="google" content="index,follow">
+    <meta name="googlebot" content="index,follow">
+    <meta name="keywords" content="Kun Liu, UCL, Computer Graphics, 3D Reconstruction, Geometry Processing, Big LiDAR/Point Data Processing, Optimization,
+Numerical Analysis">
+    <title>Use Native BLAS/LAPACK in Apache Spark</title>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="./Use Native BLAS_LAPACK in Apache Spark_files/jumbotron-narrow.css">
+    <link href="./Use Native BLAS_LAPACK in Apache Spark_files/bootstrap.min.css" rel="stylesheet">
+    <link href="./Use Native BLAS_LAPACK in Apache Spark_files/font-awesome.min.css" rel="stylesheet">
+    <link href="./Use Native BLAS_LAPACK in Apache Spark_files/css" rel="stylesheet">
+    <link rel="stylesheet" href="./Use Native BLAS_LAPACK in Apache Spark_files/syntax.css">
+    <link rel="stylesheet" href="./Use Native BLAS_LAPACK in Apache Spark_files/style.css">
+    
+    <!-- Fovicon -->
+    <link rel="shortcut icon" href="https://kun-liu.com/assets/img/favicon/favicon.png">
+	
+    <!-- JavaScripts -->
+    <script async="" src="./Use Native BLAS_LAPACK in Apache Spark_files/analytics.js"></script><script type="text/javascript" src="./Use Native BLAS_LAPACK in Apache Spark_files/jquery.min.js" async=""></script>
+    <script type="text/javascript" src="./Use Native BLAS_LAPACK in Apache Spark_files/bootstrap.min.js" async=""></script>
+    <script>
+	  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+	  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+	  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+	  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+	  ga('create', 'UA-53736116-1', 'auto');
+	  ga('send', 'pageview');
+    </script>
+    <script src="./Use Native BLAS_LAPACK in Apache Spark_files/MathJax.js" id=""></script>
+<script type="text/javascript" async="" src="./Use Native BLAS_LAPACK in Apache Spark_files/embed.js"></script><style type="text/css">.MathJax_Hover_Frame {border-radius: .25em; -webkit-border-radius: .25em; -moz-border-radius: .25em; -khtml-border-radius: .25em; box-shadow: 0px 0px 15px #83A; -webkit-box-shadow: 0px 0px 15px #83A; -moz-box-shadow: 0px 0px 15px #83A; -khtml-box-shadow: 0px 0px 15px #83A; border: 1px solid #A6D ! important; display: inline-block; position: absolute}
+.MathJax_Menu_Button .MathJax_Hover_Arrow {position: absolute; cursor: pointer; display: inline-block; border: 2px solid #AAA; border-radius: 4px; -webkit-border-radius: 4px; -moz-border-radius: 4px; -khtml-border-radius: 4px; font-family: 'Courier New',Courier; font-size: 9px; color: #F0F0F0}
+.MathJax_Menu_Button .MathJax_Hover_Arrow span {display: block; background-color: #AAA; border: 1px solid; border-radius: 3px; line-height: 0; padding: 4px}
+.MathJax_Hover_Arrow:hover {color: white!important; border: 2px solid #CCC!important}
+.MathJax_Hover_Arrow:hover span {background-color: #CCC!important}
+</style><style type="text/css">#MathJax_About {position: fixed; left: 50%; width: auto; text-align: center; border: 3px outset; padding: 1em 2em; background-color: #DDDDDD; color: black; cursor: default; font-family: message-box; font-size: 120%; font-style: normal; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; z-index: 201; border-radius: 15px; -webkit-border-radius: 15px; -moz-border-radius: 15px; -khtml-border-radius: 15px; box-shadow: 0px 10px 20px #808080; -webkit-box-shadow: 0px 10px 20px #808080; -moz-box-shadow: 0px 10px 20px #808080; -khtml-box-shadow: 0px 10px 20px #808080; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+#MathJax_About.MathJax_MousePost {outline: none}
+.MathJax_Menu {position: absolute; background-color: white; color: black; width: auto; padding: 5px 0px; border: 1px solid #CCCCCC; margin: 0; cursor: default; font: menu; text-align: left; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; z-index: 201; border-radius: 5px; -webkit-border-radius: 5px; -moz-border-radius: 5px; -khtml-border-radius: 5px; box-shadow: 0px 10px 20px #808080; -webkit-box-shadow: 0px 10px 20px #808080; -moz-box-shadow: 0px 10px 20px #808080; -khtml-box-shadow: 0px 10px 20px #808080; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+.MathJax_MenuItem {padding: 1px 2em; background: transparent}
+.MathJax_MenuArrow {position: absolute; right: .5em; padding-top: .25em; color: #666666; font-size: .75em}
+.MathJax_MenuActive .MathJax_MenuArrow {color: white}
+.MathJax_MenuArrow.RTL {left: .5em; right: auto}
+.MathJax_MenuCheck {position: absolute; left: .7em}
+.MathJax_MenuCheck.RTL {right: .7em; left: auto}
+.MathJax_MenuRadioCheck {position: absolute; left: .7em}
+.MathJax_MenuRadioCheck.RTL {right: .7em; left: auto}
+.MathJax_MenuLabel {padding: 1px 2em 3px 1.33em; font-style: italic}
+.MathJax_MenuRule {border-top: 1px solid #DDDDDD; margin: 4px 3px}
+.MathJax_MenuDisabled {color: GrayText}
+.MathJax_MenuActive {background-color: #606872; color: white}
+.MathJax_MenuDisabled:focus, .MathJax_MenuLabel:focus {background-color: #E8E8E8}
+.MathJax_ContextMenu:focus {outline: none}
+.MathJax_ContextMenu .MathJax_MenuItem:focus {outline: none}
+#MathJax_AboutClose {top: .2em; right: .2em}
+.MathJax_Menu .MathJax_MenuClose {top: -10px; left: -10px}
+.MathJax_MenuClose {position: absolute; cursor: pointer; display: inline-block; border: 2px solid #AAA; border-radius: 18px; -webkit-border-radius: 18px; -moz-border-radius: 18px; -khtml-border-radius: 18px; font-family: 'Courier New',Courier; font-size: 24px; color: #F0F0F0}
+.MathJax_MenuClose span {display: block; background-color: #AAA; border: 1.5px solid; border-radius: 18px; -webkit-border-radius: 18px; -moz-border-radius: 18px; -khtml-border-radius: 18px; line-height: 0; padding: 8px 0 6px}
+.MathJax_MenuClose:hover {color: white!important; border: 2px solid #CCC!important}
+.MathJax_MenuClose:hover span {background-color: #CCC!important}
+.MathJax_MenuClose:hover:focus {outline: none}
+</style><style type="text/css">.MathJax_Preview .MJXf-math {color: inherit!important}
+</style><style type="text/css">.MJX_Assistive_MathML {position: absolute!important; top: 0; left: 0; clip: rect(1px, 1px, 1px, 1px); padding: 1px 0 0 0!important; border: 0!important; height: 1px!important; width: 1px!important; overflow: hidden!important; display: block!important; -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none}
+.MJX_Assistive_MathML.MJX_Assistive_MathML_Block {width: 100%!important}
+</style><style type="text/css">#MathJax_Zoom {position: absolute; background-color: #F0F0F0; overflow: auto; display: block; z-index: 301; padding: .5em; border: 1px solid black; margin: 0; font-weight: normal; font-style: normal; text-align: left; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; -webkit-box-sizing: content-box; -moz-box-sizing: content-box; box-sizing: content-box; box-shadow: 5px 5px 15px #AAAAAA; -webkit-box-shadow: 5px 5px 15px #AAAAAA; -moz-box-shadow: 5px 5px 15px #AAAAAA; -khtml-box-shadow: 5px 5px 15px #AAAAAA; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+#MathJax_ZoomOverlay {position: absolute; left: 0; top: 0; z-index: 300; display: inline-block; width: 100%; height: 100%; border: 0; padding: 0; margin: 0; background-color: white; opacity: 0; filter: alpha(opacity=0)}
+#MathJax_ZoomFrame {position: relative; display: inline-block; height: 0; width: 0}
+#MathJax_ZoomEventTrap {position: absolute; left: 0; top: 0; z-index: 302; display: inline-block; border: 0; padding: 0; margin: 0; background-color: white; opacity: 0; filter: alpha(opacity=0)}
+</style><style type="text/css">.MathJax_Preview {color: #888}
+#MathJax_Message {position: fixed; left: 1em; bottom: 1.5em; background-color: #E6E6E6; border: 1px solid #959595; margin: 0px; padding: 2px 8px; z-index: 102; color: black; font-size: 80%; width: auto; white-space: nowrap}
+#MathJax_MSIE_Frame {position: absolute; top: 0; left: 0; width: 0px; z-index: 101; border: 0px; margin: 0px; padding: 0px}
+.MathJax_Error {color: #CC0000; font-style: italic}
+</style><style type="text/css">.MJXp-script {font-size: .8em}
+.MJXp-right {-webkit-transform-origin: right; -moz-transform-origin: right; -ms-transform-origin: right; -o-transform-origin: right; transform-origin: right}
+.MJXp-bold {font-weight: bold}
+.MJXp-italic {font-style: italic}
+.MJXp-scr {font-family: MathJax_Script,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-frak {font-family: MathJax_Fraktur,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-sf {font-family: MathJax_SansSerif,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-cal {font-family: MathJax_Caligraphic,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-mono {font-family: MathJax_Typewriter,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-largeop {font-size: 150%}
+.MJXp-largeop.MJXp-int {vertical-align: -.2em}
+.MJXp-math {display: inline-block; line-height: 1.2; text-indent: 0; font-family: 'Times New Roman',Times,STIXGeneral,serif; white-space: nowrap; border-collapse: collapse}
+.MJXp-display {display: block; text-align: center; margin: 1em 0}
+.MJXp-math span {display: inline-block}
+.MJXp-box {display: block!important; text-align: center}
+.MJXp-box:after {content: " "}
+.MJXp-rule {display: block!important; margin-top: .1em}
+.MJXp-char {display: block!important}
+.MJXp-mo {margin: 0 .15em}
+.MJXp-mfrac {margin: 0 .125em; vertical-align: .25em}
+.MJXp-denom {display: inline-table!important; width: 100%}
+.MJXp-denom > * {display: table-row!important}
+.MJXp-surd {vertical-align: top}
+.MJXp-surd > * {display: block!important}
+.MJXp-script-box > *  {display: table!important; height: 50%}
+.MJXp-script-box > * > * {display: table-cell!important; vertical-align: top}
+.MJXp-script-box > *:last-child > * {vertical-align: bottom}
+.MJXp-script-box > * > * > * {display: block!important}
+.MJXp-mphantom {visibility: hidden}
+.MJXp-munderover {display: inline-table!important}
+.MJXp-over {display: inline-block!important; text-align: center}
+.MJXp-over > * {display: block!important}
+.MJXp-munderover > * {display: table-row!important}
+.MJXp-mtable {vertical-align: .25em; margin: 0 .125em}
+.MJXp-mtable > * {display: inline-table!important; vertical-align: middle}
+.MJXp-mtr {display: table-row!important}
+.MJXp-mtd {display: table-cell!important; text-align: center; padding: .5em 0 0 .5em}
+.MJXp-mtr > .MJXp-mtd:first-child {padding-left: 0}
+.MJXp-mtr:first-child > .MJXp-mtd {padding-top: 0}
+.MJXp-mlabeledtr {display: table-row!important}
+.MJXp-mlabeledtr > .MJXp-mtd:first-child {padding-left: 0}
+.MJXp-mlabeledtr:first-child > .MJXp-mtd {padding-top: 0}
+.MJXp-merror {background-color: #FFFF88; color: #CC0000; border: 1px solid #CC0000; padding: 1px 3px; font-style: normal; font-size: 90%}
+.MJXp-scale0 {-webkit-transform: scaleX(.0); -moz-transform: scaleX(.0); -ms-transform: scaleX(.0); -o-transform: scaleX(.0); transform: scaleX(.0)}
+.MJXp-scale1 {-webkit-transform: scaleX(.1); -moz-transform: scaleX(.1); -ms-transform: scaleX(.1); -o-transform: scaleX(.1); transform: scaleX(.1)}
+.MJXp-scale2 {-webkit-transform: scaleX(.2); -moz-transform: scaleX(.2); -ms-transform: scaleX(.2); -o-transform: scaleX(.2); transform: scaleX(.2)}
+.MJXp-scale3 {-webkit-transform: scaleX(.3); -moz-transform: scaleX(.3); -ms-transform: scaleX(.3); -o-transform: scaleX(.3); transform: scaleX(.3)}
+.MJXp-scale4 {-webkit-transform: scaleX(.4); -moz-transform: scaleX(.4); -ms-transform: scaleX(.4); -o-transform: scaleX(.4); transform: scaleX(.4)}
+.MJXp-scale5 {-webkit-transform: scaleX(.5); -moz-transform: scaleX(.5); -ms-transform: scaleX(.5); -o-transform: scaleX(.5); transform: scaleX(.5)}
+.MJXp-scale6 {-webkit-transform: scaleX(.6); -moz-transform: scaleX(.6); -ms-transform: scaleX(.6); -o-transform: scaleX(.6); transform: scaleX(.6)}
+.MJXp-scale7 {-webkit-transform: scaleX(.7); -moz-transform: scaleX(.7); -ms-transform: scaleX(.7); -o-transform: scaleX(.7); transform: scaleX(.7)}
+.MJXp-scale8 {-webkit-transform: scaleX(.8); -moz-transform: scaleX(.8); -ms-transform: scaleX(.8); -o-transform: scaleX(.8); transform: scaleX(.8)}
+.MJXp-scale9 {-webkit-transform: scaleX(.9); -moz-transform: scaleX(.9); -ms-transform: scaleX(.9); -o-transform: scaleX(.9); transform: scaleX(.9)}
+.MathJax_PHTML .noError {vertical-align: ; font-size: 90%; text-align: left; color: black; padding: 1px 3px; border: 1px solid}
+</style><link rel="preload" as="style" href="https://c.disquscdn.com/next/embed/styles/lounge.3999ac261b914f8b8b5e85df0ff3eaea.css"><link rel="preload" as="script" href="https://c.disquscdn.com/next/embed/common.bundle.267fd1014695bb1a035de2f6e53d1baa.js"><link rel="preload" as="script" href="https://c.disquscdn.com/next/embed/lounge.bundle.72c92f66716e57062fee37ad25fc47b4.js"><link rel="preload" as="script" href="https://disqus.com/next/config.js"></head>
+
+
+
+    <body><div id="MathJax_Message" style="display: none;"></div>
+		<div class="container">
+			<div class="header">
+	
+	<div class="container-fluid">
+		<div class="row-fluid">
+
+			<div class="col-lg-6 col-md-6 col-sm-6">
+				<div class="hidden-xs">
+					<h3 class="text-muted"><strong>Kun Liu</strong></h3>
+				</div>
+				<div class="visible-xs">
+					<h3 class="text-muted text-center"><strong>Kun Liu</strong></h3>
+				</div>
+			</div>
+
+			<div class="col-lg-6 col-md-6 col-sm-6">
+				<ul class="nav nav-pills pull-right nav-justified"> 
+           			        <li class=""><a href="https://kun-liu.com/">Home</a></li>
+ 					<li class=""><a href="https://kun-liu.com/resume.pdf">Résumé</a></li>
+					<li class=""><a href="https://kun-liu.com/research">Research</a></li>
+					<li class=""><a href="https://kun-liu.com/blog">Blog</a></li>
+					<li class=""><a href="https://kun-liu.com/contact">Contact</a></li>
+				</ul>
+			</div>
+			
+		</div>
+	</div>
+
+</div>
+
+
+
+			<div>
+
+	<article>
+
+		<header>
+			<h2>Use Native BLAS/LAPACK in Apache Spark</h2>
+			<small style="color:#777">	
+				<ul class="list-inline">
+					<li><i class="fa fa-calendar"></i></li>
+					<li>December 21, 2017</li>
+					<li></li>
+					<li></li>
+					<li><i class="fa fa-folder"></i></li>
+					
+						<li>Numerical Computing</li>
+									
+					<li></li>
+					<li></li>
+					<li><i class="fa fa-tags"></i></li>
+					
+						<li>Apache Spark</li>
+					
+						<li>BLAS</li>
+					
+						<li>LAPACK</li>
+					
+						<li>Breeze</li>
+					
+						<li>netlib-java</li>
+					
+				</ul>
+			</small>
+
+		</header>
+
+		<h3 id="1-problem-statement">1. Problem statement</h3>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>17/12/21 11:11:56 WARN BLAS: Failed to load implementation from: com.github.fommil.netlib.NativeSystemBLAS
+17/12/21 11:11:56 WARN BLAS: Failed to load implementation from: com.github.fommil.netlib.NativeRefBLAS
+</code></pre></div></div>
+
+<p>The warning messages are often displayed when you use <a href="https://spark.apache.org/docs/latest/ml-guide.html">MLlib</a> in <a href="https://spark.apache.org/">Apache Spark</a>.
+It means native <a href="http://www.netlib.org/blas/">BLAS</a> implementations are not rightly installed or configured for your Apache Spark. A pure Java implementation is used which could harm the performance. See <a href="https://kun-liu.com/blog/numerical%20computing/2017/12/21/use-native-blas-and-lapack-in-apache-spark.html#ref_1">[1]</a> for more information.</p>
+
+<p>The official Spark document <a href="https://kun-liu.com/blog/numerical%20computing/2017/12/21/use-native-blas-and-lapack-in-apache-spark.html#ref_2">[2]</a> has an explanation about the warning message</p>
+
+<blockquote style="font-size: 100%">
+  <p>MLlib uses the linear algebra package Breeze, which depends on netlib-java for optimised numerical processing. If native libraries are not available at runtime, you will see a warning message and a pure JVM implementation will be used instead.</p>
+</blockquote>
+
+<p>and</p>
+
+<blockquote style="font-size: 100%">
+  <p>Due to licensing issues with runtime proprietary binaries, we do not include netlib-java’s native proxies by default.</p>
+</blockquote>
+
+<h3 id="2-solutions">2. Solutions</h3>
+<p>As stated in the official Spark document <a href="https://kun-liu.com/blog/numerical%20computing/2017/12/21/use-native-blas-and-lapack-in-apache-spark.html#ref_2">[2]</a>,</p>
+
+<blockquote style="font-size: 100%">
+  <p>To configure netlib-java / Breeze to use system optimised binaries, include com.github.fommil.netlib:all:1.1.2 (or build Spark with -Pnetlib-lgpl) as a dependency of your project</p>
+</blockquote>
+
+<p>there are two kinds of solutions</p>
+
+<ol>
+  <li>rebuild Apache Spark</li>
+  <li>configure your project</li>
+</ol>
+
+<p>The first one is almost impossible in some scenario such as Amazon EMR. This post focus on the second solution instead.</p>
+
+<h4 id="21-aside">2.1 Aside</h4>
+<p>Most of the linear algebra related functions in Spark MLlib are based on <a href="https://github.com/scalanlp/breeze">Breeze</a> which is a numerical processing library for Scala, while some of them are directly based on the low level library <a href="https://github.com/fommil/netlib-java">netlib-java</a> which is also used by <a href="https://github.com/scalanlp/breeze">Breeze</a>. In addition, Spark MLlib has some non-BLAS in-house implementations as well.</p>
+
+<p>In <a href="https://github.com/fommil/netlib-java">netlib-java</a>, the implementations of BLAS/LAPACK are provided by</p>
+
+<ul>
+  <li>“<a href="http://icl.cs.utk.edu/f2j/">F2J</a> to ensure full portability on the JVM”</li>
+  <li>“self-contained native builds using the reference Fortran from <a href="http://www.netlib.org/">netlib.org</a>”</li>
+  <li>“delegating builds that use machine optimised system libraries”</li>
+</ul>
+
+<p>The relation is illustrated as the figure. In this post, we are trying to configure and use system-provided BLAS (in green).</p>
+
+<p style="text-align:center;"><img src="./Use Native BLAS_LAPACK in Apache Spark_files/spark_blas.png" alt="Spark BLAS" style="width: 60%;"></p>
+
+<h4 id="22-steps">2.2 Steps</h4>
+
+<h5 id="step-1">Step 1:</h5>
+<p>Make sure a native BLAS/LAPACK implementation is installed such as <a href="http://math-atlas.sourceforge.net/">ATLAS</a>, <a href="https://software.intel.com/mkl">Intel MKL</a>, and <a href="https://github.com/xianyi/OpenBLAS">OpenBLAS</a>. <a href="https://github.com/xianyi/OpenBLAS">OpenBLAS</a> generally has an excellent performance among free implementations. If you work on macOS, its <a href="https://developer.apple.com/documentation/accelerate/veclib">vecLib</a> contains Apple’s highly tuned implementation of BLAS/LAPACK.</p>
+
+<h5 id="step-2">Step 2:</h5>
+<p>As sugguested in the official Spark documeny <a href="https://kun-liu.com/blog/numerical%20computing/2017/12/21/use-native-blas-and-lapack-in-apache-spark.html#ref_2">[2]</a>, include <code class="highlighter-rouge">com.github.fommil.netlib:all:1.1.2</code> in your project to use system optimized binaries.</p>
+
+<p>However, this is not enough. If you use <a href="https://www.scala-sbt.org/">sbt</a>, you have to use <a href="https://github.com/sbt/sbt-assembly#using-published-plugin">sbt-assembly</a> to generate a fat <code class="highlighter-rouge">JAR</code> for your project in order to include netlib-java.</p>
+
+<h5 id="step-3">Step 3:</h5>
+<p>Add your generated fat <code class="highlighter-rouge">JAR</code> to <code class="highlighter-rouge">spark.driver.extraClassPath</code> and <code class="highlighter-rouge">spark.executor.extraClassPath</code> in <code class="highlighter-rouge">spark-default.conf</code>. Do not use <code class="highlighter-rouge">--driver-class-path</code> or <code class="highlighter-rouge">--jars</code> when you <code class="highlighter-rouge">spark-submit</code> your jobs, it does not work (I also want to know why).</p>
+
+<p>For <code class="highlighter-rouge">pyspark</code> jobs, you only need to do the same configuration in order to use native BLAS.</p>
+
+<p>NOTE: frequently changing <code class="highlighter-rouge">spark-default.conf</code> is not convenient. Instead, you can prepare two <code class="highlighter-rouge">JAR</code>s, one is for your project and one is for netlib-java.</p>
+
+<h3 id="3-others">3. Others</h3>
+
+<h4 id="31-amazon-linux">3.1 Amazon Linux</h4>
+<p>As some people said <a href="https://kun-liu.com/blog/numerical%20computing/2017/12/21/use-native-blas-and-lapack-in-apache-spark.html#ref_3">[3]</a>, the BLAS/LAPACK installed in Amazon Linux does not perform well. We can install OpenBLAS instead. 
+Here is a bash script to install OpenBLAS in Amazon Linux:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+
+<span class="nb">set</span> <span class="nt">-e</span>
+
+<span class="nb">sudo </span>yum install <span class="nt">-y</span> git
+git clone https://github.com/xianyi/OpenBlas.git
+<span class="nb">cd </span>OpenBlas/
+make clean
+make <span class="nt">-j</span>
+<span class="nb">sudo </span>mkdir /usr/lib64/OpenBLAS
+<span class="nb">sudo </span>chmod o+w,g+w /usr/lib64/OpenBLAS/
+make <span class="nv">PREFIX</span><span class="o">=</span>/usr/lib64/OpenBLAS install
+<span class="nb">sudo </span>rm /etc/ld.so.conf.d/atlas-x86_64.conf
+<span class="nb">sudo </span>ldconfig
+<span class="nb">sudo </span>ln <span class="nt">-sf</span> /usr/lib64/OpenBLAS/lib/libopenblas.so /usr/lib64/libblas.so
+<span class="nb">sudo </span>ln <span class="nt">-sf</span> /usr/lib64/OpenBLAS/lib/libopenblas.so /usr/lib64/libblas.so.3
+<span class="nb">sudo </span>ln <span class="nt">-sf</span> /usr/lib64/OpenBLAS/lib/libopenblas.so /usr/lib64/libblas.so.3.5
+<span class="nb">sudo </span>ln <span class="nt">-sf</span> /usr/lib64/OpenBLAS/lib/libopenblas.so /usr/lib64/libblas.so.3.5.0
+<span class="nb">sudo </span>ln <span class="nt">-sf</span> /usr/lib64/OpenBLAS/lib/libopenblas.so /usr/lib64/liblapack.so
+<span class="nb">sudo </span>ln <span class="nt">-sf</span> /usr/lib64/OpenBLAS/lib/libopenblas.so /usr/lib64/liblapack.so.3
+<span class="nb">sudo </span>ln <span class="nt">-sf</span> /usr/lib64/OpenBLAS/lib/libopenblas.so /usr/lib64/liblapack.so.3.5
+<span class="nb">sudo </span>ln <span class="nt">-sf</span> /usr/lib64/OpenBLAS/lib/libopenblas.so /usr/lib64/liblapack.so.3.5.0
+</code></pre></div></div>
+
+<h4 id="32-the-multi-thread-issue">3.2 The multi-thread issue</h4>
+<p>As presented in the issue <a href="https://issues.apache.org/jira/browse/SPARK-21305">Spark-21305</a>, BLAS with multi-thread support can cause worse performance because it conflicts with Spark executors. Therefore, it is better to disable multi-thread.</p>
+
+<h4 id="33-paper">3.3 Paper</h4>
+<p><a href="https://kun-liu.com/blog/numerical%20computing/2017/12/21/use-native-blas-and-lapack-in-apache-spark.html#ref_4">[4]</a> is a bit out of date but is still very worth to read. It gives lots of details about implementations in Spark and experimental results using different BLAS implementations.</p>
+
+<h4 id="34-motivation">3.4 Motivation</h4>
+<p>This post is originated from reading <a href="https://kun-liu.com/blog/numerical%20computing/2017/12/21/use-native-blas-and-lapack-in-apache-spark.html#ref_3">[3]</a>. I found lots of related posts but they are either not complete or out of date. Thus, I decide to record all what I read during solving the problem. All comments are welcome.</p>
+
+<h3 id="references">References:</h3>
+<p><a name="ref_1" style="color:black">1.</a> <a href="http://www.spark.tc/blas-libraries-in-mllib/">Improving BLAS library performance for MLlib</a></p>
+
+<p><a name="ref_2" style="color:black">2.</a> <a href="https://spark.apache.org/docs/latest/ml-guide.html#dependencies">MLlib Guide</a></p>
+
+<p><a name="ref_3" style="color:black">3.</a> <a href="https://stackoverflow.com/questions/37848216/how-to-configure-high-performance-blas-lapack-for-breeze-on-amazon-emr-ec2">A question in Stackoverflow</a></p>
+
+<p><a name="ref_4" style="color:black">4.</a> <a href="https://arxiv.org/abs/1509.02256">Matrix Computations and Optimization in Apache Spark</a></p>
+		
+		<br>
+		<br>
+			
+		<div id="disqus_thread"><iframe id="dsq-app8967" name="dsq-app8967" allowtransparency="true" frameborder="0" scrolling="no" tabindex="0" title="Disqus" width="100%" src="./Use Native BLAS_LAPACK in Apache Spark_files/saved_resource.html" style="width: 1px !important; min-width: 100% !important; border: none !important; overflow: hidden !important; height: 386px !important;" horizontalscrolling="no" verticalscrolling="no"></iframe></div>
+			<script type="text/javascript">
+				/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+				var disqus_shortname = 'kwunlyou'; // required: replace example with your forum shortname
+
+				/* * * DON'T EDIT BELOW THIS LINE * * */
+				(function() {
+				    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+				    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+				    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+				})();
+			</script>
+			<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    
+	</article>
+
+</div>
+
+
+			<div class="footer">
+	<div class="row">
+		<div class="col-sm-6">
+			<p class="pull-left">© 2017 Kun Liu</p>    			
+		</div>
+
+		<div class="col-sm-6">
+			<p class="text-right"><a href="https://kun-liu.com/about">About</a></p>	
+		</div>
+	</div>
+</div>
+
+		</div>
+
+    
+
+<iframe style="display: none;" src="./Use Native BLAS_LAPACK in Apache Spark_files/saved_resource(1).html"></iframe></body></html>
