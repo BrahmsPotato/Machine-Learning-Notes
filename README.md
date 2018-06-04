@@ -6,5 +6,5 @@ use nbviewer for quick view:
 - [Clustering](https://nbviewer.jupyter.org/github/BrahmsPotato/Machine-Learning-Notes/blob/master/Clustering.ipynb)
 - [Evaluation Metrics](https://nbviewer.jupyter.org/github/BrahmsPotato/Machine-Learning-Notes/blob/master/Evaluation%20Metrics.ipynb)
 - [Projects](https://nbviewer.jupyter.org/github/BrahmsPotato/Machine-Learning-Notes/blob/master/Projects.ipynb)
-- [Sparks](https://nbviewer.jupyter.org/github/BrahmsPotato/Machine-Learning-Notes/blob/master/Sparks.ipynb)
+- [Spark](https://nbviewer.jupyter.org/github/BrahmsPotato/Machine-Learning-Notes/blob/master/Spark.ipynb)
 - [Decision Surfaces](https://github.com/BrahmsPotato/Machine-Learning-Notes/blob/master/Decision%20Surfaces.pdf)
